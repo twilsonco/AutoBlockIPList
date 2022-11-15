@@ -2,8 +2,9 @@
 
 > This script allows you to automate the update of the IP block list on the Synology NAS from a list of IP's _(custom user or external list)_.
 
-_This script was only tested with Synology DSM 6 (6.2.4)_
+_This script was tested with Synology DSM 6 (6.2.4) and 7 (7.0 and 7.1.1)_
 
+⚠️  After Synology update, if you encounter any issue, re-run install requirements
 ---
 
 ### Table of contents
