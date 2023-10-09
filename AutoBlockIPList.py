@@ -12,7 +12,7 @@ import time
 from functools import reduce
 
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 def create_connection(db_file):
@@ -72,8 +72,7 @@ def process_ip(ip_list, expire):
 
 
 def url(link):
-    validator = validators.url(link)
-    if isinstance(validator, validators.ValidationFailure):
+    if validators.url(link) != True:
         raise argparse.ArgumentError
     return link
 
