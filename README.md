@@ -71,26 +71,103 @@ Go to AutoBlockIPList folder and run
 `sudo python3 -m pip install -r requirements.txt`
 
 ---
-
-#### First use
-Before to run this script in your schedule tasks, perform some single run in SSH.
-
-First one with `--backup-to` and `--dry-run` to get a backup of your database.
-
-Next with `--in-file` or `--in-url` and `--dry-run`.
-
----
 #### Synology DSM
-##### Manual usage _(recommended for first use)_
-- Connect to your NAS though SSH
-- execute script like: `sudo python3 /volume1/scripts/AutoBlockIPList.py -v --dry-run --backup-to . --in-file /volume1/homes/user/custom.txt`
 
-##### Schedule task
+##### Setup/update user script
 
-  - Go to Control Panel -> Task scheduler
-  ![Task scheduler](docs/task_scheduler.png)
-  - Setting up the task as "**root**" user
-  ![Task settings](docs/edit_task.png)
+Rather than do things over SSH, I prefer to use user-defined scripts in the task scheduler to run the script as root. Here is the script to download, install, and test-run AutoBlockIPList. You can rerun this script to install updated versions should they be released.
+
+Modify the following in the script:
+
+- `install_dir` - The folder in which to install AutoBlockIPList
+- `backup_dir` - The folder in which to store backups of the database
+
+```bash
+# Specify folder in which to install AutoBlockIPList folder
+install_dir=/volume1/Misc
+
+# Specify backup directory
+backup_dir=BlockIPList_backup
+
+cd ${install_dir}
+
+# Download latest version of AutoBlockIPList
+wget https://github.com/twilsonco/AutoBlockIPList/releases/latest/download/AutoBlockIPList.zip
+
+# Extract to folder, overwriting old version and moving source files to AutoBlockIPList directory
+7z x AutoBlockIPList.zip "*/*" -o./AutoBlockIPList -y && rm AutoBlockIPList.zip
+cd AutoBlockIPList
+mv AutoBlockIPList-*/* ./ && rm -rf AutoBlockIPList-*
+
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install pip and requirements in virtual environment
+python3 -m ensurepip
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+
+mkdir -p ../${backup_dir}
+
+# Run script in virtual environment
+python3 ./AutoBlockIPList.py --verbose --dry-run \
+	--backup-to ../${backup_dir} \
+	--expire-in-day 30 \
+	--in-url https://iplists.firehol.org/files/firehol_level1.netset \
+	https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt \
+	https://report.cs.rutgers.edu/DROP/attackers \
+	https://lists.blocklist.de/lists/all.txt
+
+# Deactivate virtual environment
+deactivate
+```
+
+Once you've modified the script, you can copy it into the DSM interface to define a new user-defined script as follows:
+
+- Go to Control Panel -> Task scheduler
+![Task scheduler](docs/task_scheduler.png)
+- Create a new user-defined script to be run at "**root**" user, manually, to install/update AutoBlockIPList
+![Setup task](docs/setup_task.png)
+- After saving the script, select it in the list of user-defined scripts and click the "Run" button to execute it. 
+  - If you selected to receive email notifications, you will receive an email with the output of the script. 
+  - Otherwise, you can check the intended install directory to see if the script was installed correctly.
+  - You should also see your backed up database in the backup directory you specified.
+
+##### Scheduled AutoBlockIPList task
+
+A second script is the one that will be run on a schedule to update the block list. 
+Modify it:
+- The `install_dir` should match the first script
+- Feel free to add or remove URLs from the `--in-url` list to suit your needs. Be sure to end each line with a backslash `\` except for the last line of the python command.
+
+```bash
+# Specify same installation directory as before
+install_dir=/volume1/Misc
+
+# Go to AutoBlockIPList directory
+cd ${install_dir}/AutoBlockIPList
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Run script in virtual environment
+python3 ./AutoBlockIPList.py --verbose \
+	--remove-expired --expire-in-day 30 \
+	--in-url https://iplists.firehol.org/files/firehol_level1.netset \
+	https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt \
+	https://report.cs.rutgers.edu/DROP/attackers \
+	https://lists.blocklist.de/lists/all.txt
+
+# Deactivate virtual environment
+deactivate
+```
+
+- Setting up the task as "**root**" user
+![Task settings](docs/edit_task.png)
+- Set the schedule to run the task as often as you like. I recommend running it at least once a day.
+- Save the task and you're done!
+- You can manually run the task to immediately update the block list, or wait for the scheduled time to run.
   
 ___
 

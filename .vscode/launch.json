@@ -1,0 +1,38 @@
+
+// Use IntelliSense to learn about possible attributes.
+// Hover to view descriptions of existing attributes.
+// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: AutoBlockIPList local file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/AutoBlockIPList.py",
+            "args": [
+                "--verbose",
+                "--dry-run",
+                "--in-file",
+                "/Users/haiiro/NoSync/AutoBlockIPList/ipsum.txt"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: AutoBlockIPList urls",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/AutoBlockIPList.py",
+            "args": [
+                "--verbose",
+                "--dry-run",
+                "--in-url",
+                "https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt",
+                "https://iplists.firehol.org/files/firehol_level1.netset",
+                "https://report.cs.rutgers.edu/DROP/attackers",
+                "https://lists.blocklist.de/lists/all.txt"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}
