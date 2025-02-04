@@ -136,3 +136,5 @@ lists/*
 
 db
 db/*
+
+.DS_Store
