@@ -126,9 +126,9 @@ deactivate
 Once you've modified the script, you can copy it into the DSM interface to define a new user-defined script as follows:
 
 - Go to Control Panel -> Task scheduler
-![Task scheduler](docs/task_scheduler.png)
+  ![Task scheduler](docs/task_scheduler.png)
 - Create a new user-defined script to be run at "**root**" user, manually, to install/update AutoBlockIPList
-![Setup task](docs/setup_task.png)
+  ![Setup task](docs/setup_task.png)
 - After saving the script, select it in the list of user-defined scripts and click the "Run" button to execute it. 
   - If you selected to receive email notifications, you will receive an email with the output of the script. e.g.
     ```
@@ -175,7 +175,7 @@ deactivate
 ```
 
 - Setting up the task as "**root**" user
-![Task settings](docs/edit_task.png)
+  ![Task settings](docs/edit_task.png)
 - Set the schedule to run the task as often as you like. I recommend running it at least once a day.
 - Save the task and you're done!
 - You can manually run the task to immediately update the block list, or wait for the scheduled time to run.
