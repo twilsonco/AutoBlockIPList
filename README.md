@@ -130,7 +130,18 @@ Once you've modified the script, you can copy it into the DSM interface to defin
 - Create a new user-defined script to be run at "**root**" user, manually, to install/update AutoBlockIPList
 ![Setup task](docs/setup_task.png)
 - After saving the script, select it in the list of user-defined scripts and click the "Run" button to execute it. 
-  - If you selected to receive email notifications, you will receive an email with the output of the script. 
+  - If you selected to receive email notifications, you will receive an email with the output of the script. e.g.
+    ```
+    IPs parsed from lists to be added: 192924
+    Total CIDR networks: 4222
+    Total IP in CIDR networks: 21390848
+    Total IP invalid: 7
+    Total potential IP: 21583772
+    Total deny IP currently in your Synology DB: 10949
+    Total deny IP now in your Synology DB: 10949 (0 added)
+    Dry run mode. No changes were made to the database
+    Elapsed time: 821.46 seconds
+    ```
   - Otherwise, you can check the intended install directory to see if the script was installed correctly.
   - You should also see your backed up database in the backup directory you specified.
 
@@ -138,7 +149,7 @@ Once you've modified the script, you can copy it into the DSM interface to defin
 
 A second script is the one that will be run on a schedule to update the block list. 
 Modify it:
-- The `install_dir` should match the first script
+- The `install_dir` should match the first script.
 - Feel free to add or remove URLs from the `--in-url` list to suit your needs. Be sure to end each line with a backslash `\` except for the last line of the python command.
 
 ```bash
