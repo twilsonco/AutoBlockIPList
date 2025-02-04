@@ -259,6 +259,7 @@ if __name__ == '__main__':
                 try:
                     c.executemany("REPLACE INTO AutoBlockIP (IP, IPStd, ExpireTime, Deny, RecordTime, Type, Meta) "
                         "VALUES(?, ?, ?, 1, strftime('%s','now'), 0, NULL);", ips_formatted)
+                    conn.commit()
                     current_count += simple_ip_count
                 except sqlite3.Error as e:
                     raise e
@@ -271,19 +272,19 @@ if __name__ == '__main__':
                     try:
                         c.executemany("REPLACE INTO AutoBlockIP (IP, IPStd, ExpireTime, Deny, RecordTime, Type, Meta) "
                             "VALUES(?, ?, ?, 1, strftime('%s','now'), 0, NULL);", ips_formatted)
+                        conn.commit()
                         current_count += len(ips_formatted)
                     except sqlite3.Error as e:
                         print(f"Error adding CIDR {cidr_str} to the database: {e}")
                         remaining_cidr_network_count = len(cidr_networks) - i
                         remaining_IP_count = total_count - current_count
                         print(f"Remaining {remaining_cidr_network_count} CIDR networks and {remaining_IP_count} IPs will not be added to the database.")
+                        conn.rollback()
                         break
                 
         if db_accessible:
             nb_ip = c.execute("SELECT COUNT(IP) FROM AutoBlockIP WHERE Deny = 1")
             nb_ip_after = nb_ip.fetchone()[0]
-            verbose("Committing changes to the database.")
-            conn.commit()
             conn.close()
             verbose(f"Total deny IP now in your Synology DB: {nb_ip_after} ({nb_ip_after - nb_ip_before} added)")
         
