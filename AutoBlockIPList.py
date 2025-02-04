@@ -24,6 +24,7 @@ def create_connection(db_file):
 
 def get_ip_remote(link):
     data = ""
+    verbose(f"Fetching IP list from {link}")
     try:
         r = requests.get(link)
         r.raise_for_status()
@@ -34,6 +35,7 @@ def get_ip_remote(link):
 
 
 def get_ip_local(file):
+    verbose(f"Reading IP list from {file.name}")
     return file.read().replace("\r", "")
 
 
@@ -52,12 +54,14 @@ def ipv6_to_ipstd(ipv6):
     return ipaddress.ip_address(ipv6).exploded.upper()
 
 
-def process_ip(ip_list, expire):
+def process_ip(ip_list, expire, min_cidr_prefix=12):
     processed_ips = set()
     cidr_networks = set()
     invalid = set()
     total_potential_ips = 0
     cidr_ip_count = 0
+    skipped_cidr_ip_count = 0
+    skipped_cidr_network_count = 0
 
     for line in ip_list:
         for i in line.strip().split():
@@ -68,11 +72,12 @@ def process_ip(ip_list, expire):
                 if '/' in i:
                     network = ipaddress.ip_network(i)
                     total_potential_ips += network.num_addresses
-                    if network.prefixlen >= 12:
-                        cidr_networks.add((str(network), expire))
+                    if network.prefixlen >= min_cidr_prefix:
+                        cidr_networks.add(i)
                         cidr_ip_count += network.num_addresses
                     else:
-                        verbose(f"Network {i} is too large to be processed")
+                        skipped_cidr_network_count += 1
+                        skipped_cidr_ip_count += network.num_addresses
                 else:
                     # Process as single IP
                     ip = ipaddress.ip_address(i)
@@ -88,6 +93,12 @@ def process_ip(ip_list, expire):
             except ValueError:
                 if i != "":
                     invalid.add(i)
+    
+    # Sort the list of CIDR networks in descending order of trailing prefix (increasing order of network size) and then by IP address
+    cidr_networks = sorted(cidr_networks, key=lambda x: (-int(x.split('/')[1]), x.split('/')[0]))
+    
+    if skipped_cidr_network_count > 0:
+        verbose(f"Skipped {skipped_cidr_network_count} CIDR networks with {skipped_cidr_ip_count} IPs due to being too large to process")
 
     return list(processed_ips), list(cidr_networks), list(invalid), cidr_ip_count
 
@@ -135,13 +146,31 @@ def verbose(message):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(prog='AutoBlockIPList')
+    parser = argparse.ArgumentParser(prog='AutoBlockIPList', description='''Add IP addresses to Synology AutoBlock database from one or more lists from files or URLs.
+
+Example IP lists:
+
+Simple list:
+83.222.191.62
+218.92.0.111
+218.92.0.114
+
+Lists with multiple columns:
+83.222.191.62 8
+218.92.0.111 8
+218.92.0.114 8
+
+Lists with CIDR notation:
+1.10.16.0/20
+1.19.0.0/16
+1.32.128.0/18
+''')
     parser.add_argument("-f","--in-file", nargs='*', type=argparse.FileType('r'), default=[],
                         help="Local list file separated by a space "
-                             "(eg. /home/user/list.txt custom.txt)")
+                        "(eg. /home/user/list.txt custom.txt)")
     parser.add_argument("-u", "--in-url", nargs="*", type=url, default=[],
                         help="External list url separated by a space "
-                             "(eg https://example.com/list.txt https://example.com/all.txt)")
+                        "(eg https://example.com/list.txt https://example.com/all.txt)")
     parser.add_argument("-e", "--expire-in-day", type=int, default=0,
                         help="Expire time in day. Default 0: no expiration")
     parser.add_argument("--remove-expired", action='store_true',
@@ -154,6 +183,8 @@ def parse_args():
                         help="Perform a run without any modifications")
     parser.add_argument("-v", "--verbose", action='store_true',
                         help="Increase output verbosity")
+    parser.add_argument("--db-location", type=str, default="/etc/synoautoblock.db", help="Location of the Synology AutoBlock database")
+    parser.add_argument("--min-cidr-prefix", type=int, default=16, help="Minimum CIDR prefix to process. Smaller values allow larger networks.")
     parser.add_argument('--version', action='version', version=f'%(prog)s version {VERSION}')
 
     a = parser.parse_args()
@@ -175,7 +206,7 @@ if __name__ == '__main__':
     # define the path of the database
     # DSM 6: "/etc/synoautoblock.db"
     # DSM 7: should be the same (TODO confirm path)
-    db = "/etc/synoautoblock.db"
+    db = args.db_location
 
     db_present = os.path.isfile(db)
     db_accessible = db_present and os.access(db, os.R_OK)
@@ -194,14 +225,16 @@ if __name__ == '__main__':
         args.expire_in_day = int(start_time) + args.expire_in_day * 60 * 60 * 24
 
     ips = get_ip_list(args.in_file, args.in_url)
-    ips_formatted, cidr_networks, ips_invalid, cidr_ip_count = process_ip(ips, args.expire_in_day)
-    verbose(f"IPs parsed from lists to be added: {len(ips_formatted)}")
+    ips_formatted, cidr_networks, ips_invalid, cidr_ip_count = process_ip(ips, args.expire_in_day, args.min_cidr_prefix)
+    simple_ip_count = len(ips_formatted)
+    total_count = simple_ip_count + cidr_ip_count
+    verbose(f"IPs parsed from lists to be added: {simple_ip_count}")
     verbose(f"Total CIDR networks: {len(cidr_networks)}")
     verbose(f"Total IP in CIDR networks: {cidr_ip_count}")
     verbose(f"Total IP invalid: {len(ips_invalid)}")
-    verbose(f"Total potential IP: {cidr_ip_count + len(ips_formatted)}")
+    verbose(f"Total potential IP: {total_count}")
 
-    if len(ips_formatted) + len(cidr_networks) > 0:
+    if simple_ip_count + len(cidr_networks) > 0:
         if db_accessible:
             conn = create_connection(db)
             c = conn.cursor()
@@ -217,22 +250,39 @@ if __name__ == '__main__':
         if db_accessible:
             nb_ip = c.execute("SELECT COUNT(IP) FROM AutoBlockIP WHERE Deny = 1")
             nb_ip_before = nb_ip.fetchone()[0]
+            current_count = int(nb_ip_before)
             verbose(f"Total deny IP currently in your Synology DB: {nb_ip_before}")
             
-        if len(ips_formatted) > 0:
+        if simple_ip_count > 0:
             if not args.dry_run and db_accessible:
-                c.executemany("REPLACE INTO AutoBlockIP (IP, IPStd, ExpireTime, Deny, RecordTime, Type, Meta) "
-                    "VALUES(?, ?, ?, 1, strftime('%s','now'), 0, NULL);", ips_formatted)
+                verbose(f"Adding {simple_ip_count} IPs to the database from simple IP lists")
+                try:
+                    c.executemany("REPLACE INTO AutoBlockIP (IP, IPStd, ExpireTime, Deny, RecordTime, Type, Meta) "
+                        "VALUES(?, ?, ?, 1, strftime('%s','now'), 0, NULL);", ips_formatted)
+                    current_count += simple_ip_count
+                except sqlite3.Error as e:
+                    raise e
 
-        for cidr_str, expire in cidr_networks:
-            ips_formatted = expand_cidr(cidr_str, expire)
-            if len(ips_formatted) > 0 and not args.dry_run and db_accessible:
-                c.executemany("REPLACE INTO AutoBlockIP (IP, IPStd, ExpireTime, Deny, RecordTime, Type, Meta) "
-                    "VALUES(?, ?, ?, 1, strftime('%s','now'), 0, NULL);", ips_formatted)
+        if len(cidr_networks) > 0:
+            verbose(f"Adding {cidr_ip_count} IPs to the database from {len(cidr_networks)} CIDR networks")
+            for i, cidr_str in enumerate(cidr_networks):
+                ips_formatted = expand_cidr(cidr_str, args.expire_in_day)
+                if len(ips_formatted) > 0 and not args.dry_run and db_accessible:
+                    try:
+                        c.executemany("REPLACE INTO AutoBlockIP (IP, IPStd, ExpireTime, Deny, RecordTime, Type, Meta) "
+                            "VALUES(?, ?, ?, 1, strftime('%s','now'), 0, NULL);", ips_formatted)
+                        current_count += len(ips_formatted)
+                    except sqlite3.Error as e:
+                        print(f"Error adding CIDR {cidr_str} to the database: {e}")
+                        remaining_cidr_network_count = len(cidr_networks) - i
+                        remaining_IP_count = total_count - current_count
+                        print(f"Remaining {remaining_cidr_network_count} CIDR networks and {remaining_IP_count} IPs will not be added to the database.")
+                        break
                 
         if db_accessible:
             nb_ip = c.execute("SELECT COUNT(IP) FROM AutoBlockIP WHERE Deny = 1")
             nb_ip_after = nb_ip.fetchone()[0]
+            verbose("Committing changes to the database.")
             conn.commit()
             conn.close()
             verbose(f"Total deny IP now in your Synology DB: {nb_ip_after} ({nb_ip_after - nb_ip_before} added)")

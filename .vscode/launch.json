@@ -12,9 +12,15 @@
             "program": "${workspaceFolder}/AutoBlockIPList.py",
             "args": [
                 "--verbose",
-                "--dry-run",
+                "--backup-to",
+                "${workspaceFolder}/db",
+                "--db-location",
+                "${workspaceFolder}/db/synoautoblock.db",
                 "--in-file",
-                "/Users/haiiro/NoSync/AutoBlockIPList/ipsum.txt"
+                "${workspaceFolder}/lists/ipsum.txt"
+                "${workspaceFolder}/lists/all.txt"
+                "${workspaceFolder}/lists/attackers"
+                "${workspaceFolder}/lists/firehol_level1.netset"
             ],
             "console": "integratedTerminal"
         },
