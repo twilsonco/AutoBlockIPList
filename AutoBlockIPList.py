@@ -12,7 +12,7 @@ import time
 from functools import reduce
 
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 
 def create_connection(db_file):
