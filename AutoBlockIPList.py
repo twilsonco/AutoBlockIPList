@@ -12,7 +12,7 @@ import time
 from functools import reduce
 
 
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 
 
 def create_connection(db_file):
@@ -181,10 +181,14 @@ Lists with CIDR notation:
                         help="Clear ALL deny entry in database before filling")
     parser.add_argument("--dry-run", action='store_true',
                         help="Perform a run without any modifications")
+    parser.add_argument("--batch-size", type=int, default=100000,
+						help="Limit number of database rows modified per batch for removing expired extries or clearing thedatabase. Default 100,000")
+    parser.add_argument("--disable-journaling", action='store_true',
+                        help="Disable journaling when modifying database. WARNING: this can result in database error in case of a crash, and should only be used if a small batch size doesn't alleviate errors related to database or disk being full!")
     parser.add_argument("-v", "--verbose", action='store_true',
                         help="Increase output verbosity")
     parser.add_argument("--db-location", type=str, default="/etc/synoautoblock.db", help="Location of the Synology AutoBlock database")
-    parser.add_argument("--min-cidr-prefix", type=int, default=16, help="Minimum CIDR prefix to process. Smaller values allow larger networks.")
+    parser.add_argument("--min-cidr-prefix", type=int, default=24, help="Minimum CIDR prefix to process. Smaller values allow larger networks. Default 24: only add networks with 256 addresses or less")
     parser.add_argument('--version', action='version', version=f'%(prog)s version {VERSION}')
 
     a = parser.parse_args()
@@ -217,7 +221,7 @@ if __name__ == '__main__':
         raise FileExistsError("Unable to read database. Run this script with sudo or root user.")
 
     if args.backup_to is not None and db_present:
-        filename = datetime.now().strftime("%Y%d%m_%H%M%S") + "_backup_synoautoblock.db"
+        filename = datetime.now().strftime("%Y%m%d_%H%M%S") + "_backup_synoautoblock.db"
         shutil.copy(db, os.path.join(args.backup_to, filename))
         verbose("Database successfully backup")
 
@@ -239,13 +243,50 @@ if __name__ == '__main__':
             conn = create_connection(db)
             c = conn.cursor()
 
+        if not args.dry_run and db_accessible:
+            if args.disable_journaling:
+            	verbose("WARNING!!! Database journaling is disabled. DO NOT quit the program before it finishes!")
+            	c.execute("PRAGMA journal_mode = OFF")
+            else:
+                c.execute("PRAGMA journal_mode = MEMORY")
+            conn.commit()
+
         if args.remove_expired and not args.dry_run and db_accessible:
-            c.execute("DELETE FROM AutoBlockIP WHERE Deny = 1 AND ExpireTime > 0 AND ExpireTime < strftime('%s','now')")
+            while True:
+                c.execute("""
+    DELETE FROM AutoBlockIP 
+    WHERE rowid IN (
+        SELECT rowid FROM AutoBlockIP 
+        WHERE Deny = 1 
+        AND ExpireTime > 0 
+        AND ExpireTime < strftime('%s','now')
+        LIMIT ?
+    )
+""", (args.batch_size,))
+                if c.rowcount == 0:
+                    break
+                conn.commit()
             verbose("All expired entry was successfully removed")
 
         if args.clear_db and not args.dry_run and db_accessible:
-            c.execute("DELETE FROM AutoBlockIP WHERE Deny = 1")
+            while True:
+                c.execute("""
+    DELETE FROM AutoBlockIP 
+    WHERE Deny = 1 
+    AND rowid IN (
+        SELECT rowid FROM AutoBlockIP 
+        LIMIT ?
+    )
+""", (args.batch_size,))
+                if c.rowcount == 0:
+                    break
+                conn.commit()
             verbose("All deny entry was successfully removed")
+        
+        if not args.dry_run and db_accessible:
+            conn.commit()
+            c.execute("VACUUM")
+            conn.commit()
 
         if db_accessible:
             nb_ip = c.execute("SELECT COUNT(IP) FROM AutoBlockIP WHERE Deny = 1")

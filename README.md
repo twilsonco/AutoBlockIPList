@@ -4,6 +4,11 @@
 
 _This script was tested with Synology DSM 6 (6.2.4) and 7 (7.0, 7.1 and 7.2)_
 
+## ⚠️ If you add too many IP addresses, your DSM system partition will fill up
+- It's only about 2.3GB in size
+- If the system partition fills up, you will be unable to perform basic system tasks such as installing/updating packages, creating/modifying Hyper Backup tasks, etc.
+- This is a big limit to the utility of the DSM block list in general, (despite [claims of Marius Hosting](https://mariushosting.com/how-does-synology-ip-block-list-work/) that "...Synology NAS is a top of the range device, much more powerful than your ordinary computer, which means it’ll have no problem with blocking as many IPs as you need.")
+
 ⚠️  After Synology update, if you encounter any issue, re-run install requirements
 ---
 
